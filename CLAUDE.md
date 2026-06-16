@@ -1,87 +1,65 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-## Project Overview
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-This repository is for exploring and implementing VMTP (Versatile Message Transaction Protocol) based on RFC 1045. VMTP is a transport protocol designed specifically for remote procedure call (RPC) and transaction-oriented communication.
+## 1. Think Before Coding
 
-**Current State**: Early exploration. Building a simulator to test whether VMTP's transaction-as-primitive model behaves meaningfully differently from modern transaction-on-streams (gRPC/QUIC) under failure conditions.
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-**Target**: Datacenter protocol. Datacenters control their fabric, can accept IP protocol 81, and can run IP multicast - making VMTP's design viable there even if the public internet has ossified around TCP/UDP.
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-## Development Environment
+## 2. Simplicity First
 
-```bash
-# Use uv, not pip
-uv sync              # Install dependencies
-uv run python ...    # Run scripts
-uv run pytest        # Run tests
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
 ```
 
-**Important**: This project uses `uv` for Python environment management. Do not use `pip` directly.
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## Key Documents
+---
 
-- `docs/rfc1045.txt` - Complete RFC 1045 specification (the primary source)
-- `docs/vmtp-minimal-spec.md` - Extracted minimal transaction protocol for simulator design
-
-## What is VMTP?
-
-VMTP addresses TCP's inefficiencies for RPC by providing:
-- Minimal two-packet exchanges for simple transactions (vs TCP's connection setup/teardown overhead)
-- Stateless transaction model - no connection state between transactions
-- Host-address independent entity identifiers (solves process migration, mobile hosts)
-- Built-in multicast, real-time, and security support
-
-## Key Architectural Concepts
-
-**Entities**: Transport-level endpoints identified by stable, 64-bit host-address independent identifiers. Entities can be processes, services, or any addressable endpoint.
-
-**Message Transactions**: The fundamental communication unit - a request-response exchange as an atomic operation. The client sends a request, server processes it, server responds.
-
-**Entity Domains**: Different naming and allocation schemes for entity identifiers (domain 1 for Internet, domain 3 for Stanford).
-
-**Packet Groups**: Multiple packets transmitted together to support streaming for large data transfers.
-
-**Client State Record (CSR)**: Server-maintained state about remote clients. Servers can discard CSRs without affecting correctness (stateless design).
-
-## Protocol Architecture (from RFC 1045)
-
-1. **Client Protocol Module**: Initiates transactions, handles retransmissions, manages timeouts, processes responses
-2. **Server Protocol Module**: Receives requests, manages CSRs, sends responses, handles duplicate detection
-3. **Management Module**: Entity creation/deletion, authentication, group membership
-4. **Reliability Layer**: Checksums, acknowledgments, retransmissions, duplicate suppression
-
-Both client and server implement explicit state machines with event-driven processing (user events, packet arrivals, timeouts).
-
-## Key Differences from TCP
-
-| Aspect | TCP | VMTP |
-|--------|-----|------|
-| Model | Stream-oriented | Transaction-oriented |
-| Connection | Requires setup/teardown | Stateless transactions |
-| RPC cost | Multiple round-trips | 2 packets minimum |
-| Naming | IP:port (host-bound) | Entity IDs (host-independent) |
-| Multicast | Not supported | Native support |
-
-## Subsettability
-
-VMTP is designed for minimal implementations - useful for PROM boot loaders, embedded sensors, simple controllers. Not all features need to be implemented.
-
-## RFC 1045 Structure
-
-Key sections for implementation:
-- Section 3: Packet formats and field definitions
-- Section 4: Client protocol state machine and events
-- Section 5: Server protocol state machine and events
-- Appendix VI: IP implementation specifics
-- Appendix VII: Implementation notes and data structures
-- Appendix VIII: UNIX 4.3 BSD kernel interface
-
-## Terminology
-
-- **Transaction ID**: 32-bit identifier for a request-response exchange
-- **Run**: Sequence of packet groups (for streaming)
-- **Delivery Mask**: Bitmap indicating which packets in a group were received
-- **CMG (Co-resident Module Group)**: Entities sharing an address space
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
